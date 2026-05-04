@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime  # noqa: TC003 — needed at runtime for Mapped[datetime]
+from datetime import datetime
 from enum import StrEnum
 from typing import Any
 

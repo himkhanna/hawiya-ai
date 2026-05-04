@@ -10,7 +10,6 @@ import asyncio
 import sys
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from hawiya.config import Environment, get_settings
 from hawiya.db.session import _get_factory
@@ -29,9 +28,7 @@ async def _seed() -> None:
     async with factory() as session:  # type: AsyncSession
         async with session.begin():
             existing = (
-                await session.execute(
-                    select(Tenant).where(Tenant.tenant_name == DEV_TENANT_NAME)
-                )
+                await session.execute(select(Tenant).where(Tenant.tenant_name == DEV_TENANT_NAME))
             ).scalar_one_or_none()
             if existing is not None:
                 tenant = existing

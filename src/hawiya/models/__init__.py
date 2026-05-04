@@ -2,6 +2,13 @@
 
 from hawiya.models.audit import AuditLog
 from hawiya.models.base import Base
+from hawiya.models.document_extraction import DocumentExtraction
 from hawiya.models.tenant import Tenant, TenantStatus
 
-__all__ = ["AuditLog", "Base", "Tenant", "TenantStatus"]
+__all__ = [
+    "AuditLog",
+    "Base",
+    "DocumentExtraction",
+    "Tenant",
+    "TenantStatus",
+]

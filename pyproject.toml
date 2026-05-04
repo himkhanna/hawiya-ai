@@ -34,6 +34,12 @@ dev = [
     "pre-commit>=4.0",
     "types-python-dateutil",
 ]
+ocr = [
+    # PassportEye + Tesseract per CLAUDE.md §3. Tesseract itself is a
+    # system binary — install separately on each target OS.
+    "passporteye>=2.2",
+    "Pillow>=10.4",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hawiya"]
@@ -57,11 +63,14 @@ select = [
     "T20",            # flake8-print  (forbid print)
     "RET",            # return
     "SIM",            # simplify
-    "TCH",            # type-checking
     "ARG",            # unused args
     "PL",             # pylint subset
     "RUF",
 ]
+# TCH (TC001/TC002/TC003) is intentionally not selected — every module uses
+# `from __future__ import annotations`, so moving runtime-needed types
+# (Pydantic / SQLAlchemy / FastAPI Depends) into TYPE_CHECKING blocks
+# breaks resolution. The rule fires too often as a false positive.
 ignore = [
     "PLR0913",  # too many arguments — services often need many
     "S101",     # asserts in tests are fine
@@ -70,6 +79,11 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S", "PLR2004", "ARG"]
 "src/hawiya/db/migrations/**" = ["E501", "N999"]
+# CLI scripts: print is the user-facing output channel; complexity
+# limits don't help readability of one-shot tools.
+"scripts/**" = ["T201", "PLR0912", "PLR0915", "PLR2004", "SIM117", "E501"]
+# FastAPI's standard pattern uses Depends/File/Form in argument defaults.
+"src/hawiya/api/**" = ["B008"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -84,7 +98,7 @@ disallow_untyped_decorators = false
 exclude = ["src/hawiya/db/migrations/.*"]
 
 [[tool.mypy.overrides]]
-module = ["testcontainers.*", "alembic.*"]
+module = ["testcontainers.*", "alembic.*", "passporteye.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

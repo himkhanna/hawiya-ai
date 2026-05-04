@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from hawiya import __version__
-from hawiya.api import health
+from hawiya.api import documents, health
 from hawiya.config import get_settings
 from hawiya.observability.logger import configure_logging, get_logger
 from hawiya.tenancy.context import current_request_id
@@ -65,6 +65,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(health.router)
+    app.include_router(documents.router)
     return app
 
 
