@@ -1,7 +1,9 @@
 """FastAPI dependency providers.
 
-The OCR adapter is exposed as a dependency so tests can swap a mock via
-``app.dependency_overrides[get_ocr_adapter] = ...`` without monkey-patching.
+Tests swap collaborators via ``app.dependency_overrides[get_X] = fake``
+without monkey-patching. A request shares one session across every
+dependency that asks for it (FastAPI caches `Depends` resolutions per
+request), so all repositories and services see the same transaction.
 """
 
 from __future__ import annotations
@@ -12,9 +14,15 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from hawiya.audit.writer import AuditWriter
+from hawiya.db.repositories.person_identifier_repository import (
+    PersonIdentifierRepository,
+)
+from hawiya.db.repositories.person_repository import PersonRepository
 from hawiya.db.session import get_session
 from hawiya.extractors.ocr import OCRAdapter, PassportEyeAdapter
+from hawiya.matching.deterministic import DeterministicMatcher
 from hawiya.services.extraction_service import ExtractionService
+from hawiya.services.identity_service import IdentityService
 
 _ocr_singleton: OCRAdapter | None = None
 
@@ -33,9 +41,46 @@ async def get_audit_writer(
     yield AuditWriter(session)
 
 
+async def get_person_repository(
+    session: AsyncSession = Depends(get_session),
+) -> AsyncIterator[PersonRepository]:
+    yield PersonRepository(session)
+
+
+async def get_identifier_repository(
+    session: AsyncSession = Depends(get_session),
+) -> AsyncIterator[PersonIdentifierRepository]:
+    yield PersonIdentifierRepository(session)
+
+
+async def get_matcher(
+    identifier_repo: PersonIdentifierRepository = Depends(get_identifier_repository),
+    person_repo: PersonRepository = Depends(get_person_repository),
+) -> AsyncIterator[DeterministicMatcher]:
+    yield DeterministicMatcher(identifier_repo=identifier_repo, person_repo=person_repo)
+
+
 async def get_extraction_service(
     session: AsyncSession = Depends(get_session),
     ocr: OCRAdapter = Depends(get_ocr_adapter),
 ) -> AsyncIterator[ExtractionService]:
     audit = AuditWriter(session)
     yield ExtractionService(session=session, ocr=ocr, audit=audit)
+
+
+async def get_identity_service(
+    session: AsyncSession = Depends(get_session),
+    extraction: ExtractionService = Depends(get_extraction_service),
+    matcher: DeterministicMatcher = Depends(get_matcher),
+    person_repo: PersonRepository = Depends(get_person_repository),
+    identifier_repo: PersonIdentifierRepository = Depends(get_identifier_repository),
+) -> AsyncIterator[IdentityService]:
+    audit = AuditWriter(session)
+    yield IdentityService(
+        session=session,
+        extraction_service=extraction,
+        matcher=matcher,
+        person_repo=person_repo,
+        identifier_repo=identifier_repo,
+        audit=audit,
+    )

@@ -77,13 +77,17 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S", "PLR2004", "ARG"]
+"tests/**" = ["S", "PLR2004", "ARG", "PLC0415", "N805"]
 "src/hawiya/db/migrations/**" = ["E501", "N999"]
 # CLI scripts: print is the user-facing output channel; complexity
 # limits don't help readability of one-shot tools.
 "scripts/**" = ["T201", "PLR0912", "PLR0915", "PLR2004", "SIM117", "E501"]
 # FastAPI's standard pattern uses Depends/File/Form in argument defaults.
 "src/hawiya/api/**" = ["B008"]
+# This module deliberately contains Arabic letters in strings, comments,
+# and translation maps; ruff's "ambiguous character" rule can't distinguish
+# intentional from accidental and would fire on every line.
+"src/hawiya/matching/arabic_names.py" = ["RUF001", "RUF003"]
 
 [tool.ruff.format]
 quote-style = "double"

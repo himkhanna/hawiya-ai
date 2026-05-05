@@ -13,10 +13,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from hawiya import __version__
-from hawiya.api import documents, health
+from hawiya.api import documents, health, identity, persons
 from hawiya.config import get_settings
 from hawiya.observability.logger import configure_logging, get_logger
 from hawiya.tenancy.context import current_request_id
+from hawiya.tenancy.idempotency import IdempotencyMiddleware
 from hawiya.tenancy.middleware import TenancyMiddleware
 
 if TYPE_CHECKING:
@@ -43,6 +44,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Order matters: IdempotencyMiddleware is added FIRST so TenancyMiddleware
+    # ends up OUTSIDE it (FastAPI prepends to user_middleware). Tenancy auth
+    # runs first; idempotency only sees authenticated requests.
+    app.add_middleware(IdempotencyMiddleware)
     app.add_middleware(TenancyMiddleware)
 
     @app.exception_handler(Exception)
@@ -66,6 +71,8 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(documents.router)
+    app.include_router(identity.router)
+    app.include_router(persons.router)
     return app
 
 
