@@ -34,6 +34,7 @@ UNAUTHENTICATED_PATHS: frozenset[str] = frozenset(
     {
         "/v1/health",
         "/v1/ready",
+        "/metrics",  # Prometheus scraper; protect via network policy in prod.
         "/openapi.json",
         "/docs",
         "/docs/oauth2-redirect",

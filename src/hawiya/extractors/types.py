@@ -21,7 +21,7 @@ class DocumentType(StrEnum):
 class ChecksumStatus(StrEnum):
     """Aggregate result of the per-field MRZ checksums (per CLAUDE.md §6)."""
 
-    ALL_PASS = "all_pass"  # noqa: S105 — enum value, not a credential
+    ALL_PASS = "all_pass"  # noqa: S105 — enum value, not a credential  # nosec B105
     PARTIAL = "partial"
     ALL_FAIL = "all_fail"
     NOT_APPLICABLE = "n/a"

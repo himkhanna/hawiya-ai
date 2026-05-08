@@ -16,9 +16,12 @@ from hawiya import __version__
 from hawiya.api import documents, health, identity, persons
 from hawiya.config import get_settings
 from hawiya.observability.logger import configure_logging, get_logger
+from hawiya.observability.metrics import configure_metrics
+from hawiya.observability.tracing import configure_tracing
 from hawiya.tenancy.context import current_request_id
 from hawiya.tenancy.idempotency import IdempotencyMiddleware
 from hawiya.tenancy.middleware import TenancyMiddleware
+from hawiya.tenancy.rate_limit import RateLimitMiddleware
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -44,10 +47,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Order matters: IdempotencyMiddleware is added FIRST so TenancyMiddleware
-    # ends up OUTSIDE it (FastAPI prepends to user_middleware). Tenancy auth
-    # runs first; idempotency only sees authenticated requests.
+    # Order matters: FastAPI prepends to user_middleware, so the LAST
+    # add_middleware call ends up OUTERMOST. Desired request flow:
+    #   Tenancy (auth + tenant context) → RateLimit → Idempotency → app.
+    # That way the limiter only sees authenticated requests, and a cached
+    # idempotent response doesn't consume a rate-limit token on replay.
     app.add_middleware(IdempotencyMiddleware)
+    app.add_middleware(RateLimitMiddleware)
     app.add_middleware(TenancyMiddleware)
 
     @app.exception_handler(Exception)
@@ -73,6 +79,9 @@ def create_app() -> FastAPI:
     app.include_router(documents.router)
     app.include_router(identity.router)
     app.include_router(persons.router)
+
+    configure_metrics(app)  # mounts /metrics
+    configure_tracing(app)  # auto-instruments FastAPI
     return app
 
 

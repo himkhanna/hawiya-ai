@@ -46,6 +46,24 @@ class Settings(BaseSettings):
         "Phase 1 stub; replaced by mTLS or OAuth2 before production.",
     )
 
+    # ------------------------------------------------------------------ Telemetry
+    otel_service_name: str = "hawiya-ai"
+    otel_exporter_otlp_endpoint: str = Field(
+        default="",
+        description="OTLP/gRPC endpoint (e.g. http://tempo:4317). Empty disables export.",
+    )
+    otel_console_exporter: bool = Field(
+        default=False,
+        description="If true, also export spans to stdout — useful in dev.",
+    )
+
+    # ------------------------------------------------------------------ Limits
+    rate_limit_default_per_minute: int = Field(
+        default=100,
+        description="Default requests/min per tenant on extract/resolve. "
+        "Per-tenant overrides live in Tenant.config.",
+    )
+
     @property
     def is_prod(self) -> bool:
         return self.env is Environment.PROD

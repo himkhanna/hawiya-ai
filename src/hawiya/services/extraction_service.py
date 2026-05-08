@@ -38,6 +38,11 @@ from hawiya.extractors.types import (
 )
 from hawiya.models import DocumentExtraction
 from hawiya.observability.logger import get_logger
+from hawiya.observability.metrics import (
+    EXTRACTION_DURATION_SECONDS,
+    EXTRACTION_FAILURES_TOTAL,
+    EXTRACTIONS_TOTAL,
+)
 from hawiya.services.base import ServiceBase, requires_tenant
 
 log = get_logger("hawiya.extraction")
@@ -78,6 +83,9 @@ class ExtractionService(ServiceBase):
         try:
             line1, line2 = await self.ocr.read_mrz(payload, content_type)
         except (NoMRZFoundError, OCRUnavailableError, MRZFormatError) as e:
+            EXTRACTION_FAILURES_TOTAL.labels(
+                tenant_id=str(tenant_id), reason=type(e).__name__
+            ).inc()
             await self.audit.write(
                 tenant_id=tenant_id,
                 endpoint="/v1/documents/extract",
@@ -123,6 +131,13 @@ class ExtractionService(ServiceBase):
             processing_path=ProcessingPath.MRZ_ONLY.value,
             decision=parsed.checksums.status.value,
         )
+
+        EXTRACTIONS_TOTAL.labels(
+            tenant_id=str(tenant_id),
+            checksum_status=parsed.checksums.status.value,
+            processing_path=ProcessingPath.MRZ_ONLY.value,
+        ).inc()
+        EXTRACTION_DURATION_SECONDS.labels(tenant_id=str(tenant_id)).observe(elapsed_ms / 1000.0)
 
         log.info(
             "extraction_complete",

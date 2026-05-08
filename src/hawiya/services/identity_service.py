@@ -39,6 +39,7 @@ from hawiya.models import (
     MatchType,
 )
 from hawiya.observability.logger import get_logger
+from hawiya.observability.metrics import MATCH_ACTIONS_TOTAL
 from hawiya.services.base import ServiceBase, requires_tenant
 from hawiya.services.extraction_service import ExtractionService
 
@@ -160,6 +161,8 @@ class IdentityService(ServiceBase):
             processing_path=extraction.processing_path.value,
             decision=action.value,
         )
+
+        MATCH_ACTIONS_TOTAL.labels(tenant_id=str(tenant_id), action=action.value).inc()
 
         log.info(
             "identity_resolved",

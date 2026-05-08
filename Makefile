@@ -14,18 +14,20 @@ else
     RM_RF    := rm -rf
 endif
 
-PY      := $(VENV_BIN)/python
-PIP     := $(VENV_BIN)/pip
-RUFF    := $(VENV_BIN)/ruff
-MYPY    := $(VENV_BIN)/mypy
-PYTEST  := $(VENV_BIN)/pytest
-ALEMBIC := $(VENV_BIN)/alembic
-UVICORN := $(VENV_BIN)/uvicorn
+PY        := $(VENV_BIN)/python
+PIP       := $(VENV_BIN)/pip
+RUFF      := $(VENV_BIN)/ruff
+MYPY      := $(VENV_BIN)/mypy
+PYTEST    := $(VENV_BIN)/pytest
+ALEMBIC   := $(VENV_BIN)/alembic
+UVICORN   := $(VENV_BIN)/uvicorn
 PRECOMMIT := $(VENV_BIN)/pre-commit
+BANDIT    := $(VENV_BIN)/bandit
+PIPAUDIT  := $(VENV_BIN)/pip-audit
 
 .PHONY: help install lint format test test-fast test-tenancy run-dev \
         migrate migrate-create seed-dev-tenant build-image build-airgap \
-        benchmark dedupe-dry-run clean
+        benchmark dedupe-dry-run security loadtest clean
 
 help:
 	@echo "Hawiya AI — common targets"
@@ -41,6 +43,8 @@ help:
 	@echo "  seed-dev-tenant create a dev tenant and print its UUID"
 	@echo "  build-image     docker build of the service image"
 	@echo "  build-airgap    package an offline installer bundle (Phase 1 wk 4)"
+	@echo "  security        bandit + pip-audit"
+	@echo "  loadtest        50 RPS for 30s against http://localhost:8000/v1/health"
 
 install:
 	$(PYTHON) -m venv $(VENV)
@@ -87,6 +91,15 @@ build-airgap:
 
 benchmark:
 	$(PY) -m scripts.benchmark_extraction
+
+loadtest:
+	$(PY) -m scripts.load_test --rps 50 --duration 30
+
+security:
+	@echo "--- bandit ---"
+	$(BANDIT) -c pyproject.toml -r src
+	@echo "--- pip-audit ---"
+	$(PIPAUDIT) --skip-editable
 
 dedupe-dry-run:
 	$(PY) -m scripts.dedupe_existing_data --dry-run
