@@ -1,0 +1,7 @@
+# helm package
+.git/
+.gitignore
+.idea/
+.vscode/
+*.tgz
+README.md

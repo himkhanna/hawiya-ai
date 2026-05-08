@@ -1,5 +1,9 @@
-# Local development only. Production deployment is via Helm
-# (see docs/deployment/kubernetes.md, week 4).
+# Local development. Production deployment is via Helm
+# (see docs/deployment/kubernetes.md). The observability profile spins up
+# Prometheus + Tempo + Grafana for local trace/metric inspection:
+#
+#   docker compose up -d              # api + postgres only (default)
+#   docker compose --profile obs up   # adds prometheus, tempo, grafana
 
 services:
   postgres:
@@ -28,6 +32,7 @@ services:
       HAWIYA_DATABASE_URL: postgresql+psycopg://hawiya:hawiya@postgres:5432/hawiya
       HAWIYA_DATABASE_URL_SYNC: postgresql+psycopg://hawiya:hawiya@postgres:5432/hawiya
       HAWIYA_DEV_BEARER_TOKEN: dev
+      HAWIYA_OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4317
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,6 +41,41 @@ services:
     command: >
       sh -c "alembic upgrade head &&
              uvicorn hawiya.main:app --host 0.0.0.0 --port 8000"
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: ["obs"]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  tempo:
+    image: grafana/tempo:2.6.0
+    profiles: ["obs"]
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo/tempo.yaml:ro
+    ports:
+      - "3200:3200"  # tempo HTTP
+      - "4317:4317"  # OTLP/gRPC
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    profiles: ["obs"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./observability/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./observability/grafana/dashboards-provider.yml:/etc/grafana/provisioning/dashboards/dashboards-provider.yml:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - tempo
 
 volumes:
   hawiya_pgdata:

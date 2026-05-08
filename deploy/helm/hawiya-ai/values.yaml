@@ -1,0 +1,122 @@
+# Hawiya AI — Helm values.
+# Every customer-facing knob lives here. Production deployments override
+# via -f production-values.yaml, NEVER by editing this file in-place.
+
+image:
+  # Replace with the internal artifact registry path before deploying.
+  repository: hawiya-ai
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+  # If your registry needs auth, set imagePullSecrets at the chart level:
+  # imagePullSecrets:
+  #   - name: hawiya-registry-creds
+
+replicaCount: 2
+
+# Container-level resources. Phase 1 baseline; tune from real traffic
+# before raising in production.
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1
+    memory: 1Gi
+
+# ---------------------------------------------------------------- application
+app:
+  env: prod                         # HAWIYA_ENV
+  logLevel: INFO                    # HAWIYA_LOG_LEVEL
+  rateLimitDefaultPerMinute: 100
+
+  # Where the OTLP exporter ships spans. Empty string disables export.
+  otel:
+    serviceName: hawiya-ai
+    exporterEndpoint: ""            # e.g. http://tempo.observability:4317
+    consoleExporter: false
+
+# ---------------------------------------------------------------- secrets
+# Either supply existing secrets (recommended) OR set values inline (dev only).
+# In production, populate these via Sealed Secrets / external-secrets / KMS.
+secrets:
+  # If set, the chart references these instead of creating its own secret.
+  existingDatabaseSecret: ""        # secret name; expected key: dsn
+  existingAuthSecret: ""             # secret name; expected key: bearer-token
+
+  # Inline (dev-only fallback). Never commit real values here.
+  databaseUrl: "postgresql+psycopg://hawiya:hawiya@hawiya-postgres:5432/hawiya"
+  databaseUrlSync: "postgresql+psycopg://hawiya:hawiya@hawiya-postgres:5432/hawiya"
+  bearerToken: "dev"
+
+# ---------------------------------------------------------------- service
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+# ---------------------------------------------------------------- ingress
+ingress:
+  enabled: false
+  className: nginx
+  hosts:
+    - host: hawiya.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # tls:
+  #   - secretName: hawiya-tls
+  #     hosts:
+  #       - hawiya.local
+
+# --------------------------------------------------------------- prometheus
+serviceMonitor:
+  enabled: false
+  # The release namespace is used unless overridden.
+  namespace: ""
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}                        # add labels your Prometheus discovers
+
+# --------------------------------------------------------------- pod security
+podSecurityContext:
+  fsGroup: 10001
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+# Read-only fs needs a writable /tmp for uvicorn's IPC bits.
+extraVolumes:
+  - name: tmp
+    emptyDir: {}
+extraVolumeMounts:
+  - name: tmp
+    mountPath: /tmp
+
+# --------------------------------------------------------------- scheduling
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Spread replicas across nodes by default.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: hawiya-ai
+
+# --------------------------------------------------------------- service account
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}

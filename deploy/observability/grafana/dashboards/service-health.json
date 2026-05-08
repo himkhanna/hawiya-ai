@@ -1,0 +1,111 @@
+{
+  "annotations": {"list": []},
+  "title": "Hawiya AI — Service Health",
+  "uid": "hawiya-service-health",
+  "schemaVersion": 39,
+  "tags": ["hawiya"],
+  "timezone": "browser",
+  "time": {"from": "now-1h", "to": "now"},
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate (per second)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prom-hawiya"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "sum by (handler) (rate(http_requests_total{job=\"hawiya-ai\"}[5m]))",
+          "legendFormat": "{{handler}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "5xx error rate",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prom-hawiya"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{job=\"hawiya-ai\",status=~\"5..\"}[5m]))",
+          "legendFormat": "5xx"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Extraction outcomes (per tenant)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prom-hawiya"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [
+        {
+          "expr": "sum by (tenant_id, checksum_status) (rate(hawiya_extractions_total[5m]))",
+          "legendFormat": "{{tenant_id}} / {{checksum_status}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Match-action distribution",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prom-hawiya"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [
+        {
+          "expr": "sum by (action) (rate(hawiya_match_actions_total[5m]))",
+          "legendFormat": "{{action}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Extraction latency (p50 / p95 / p99)",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prom-hawiya"},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(hawiya_extraction_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(hawiya_extraction_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(hawiya_extraction_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Rate-limit rejections",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prom-hawiya"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "targets": [
+        {
+          "expr": "sum by (tenant_id, endpoint_class) (rate(hawiya_rate_limited_total[5m]))",
+          "legendFormat": "{{tenant_id}} / {{endpoint_class}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Extraction failures",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prom-hawiya"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "targets": [
+        {
+          "expr": "sum by (reason) (rate(hawiya_extraction_failures_total[5m]))",
+          "legendFormat": "{{reason}}"
+        }
+      ]
+    }
+  ]
+}

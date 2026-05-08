@@ -86,8 +86,7 @@ build-image:
 	docker build -t hawiya-ai:dev -f deploy/Dockerfile .
 
 build-airgap:
-	@echo "Phase 1 week 4 — not yet implemented"
-	@exit 1
+	bash deploy/air-gap/build.sh
 
 benchmark:
 	$(PY) -m scripts.benchmark_extraction

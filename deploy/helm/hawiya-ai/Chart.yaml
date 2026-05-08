@@ -1,0 +1,17 @@
+apiVersion: v2
+name: hawiya-ai
+description: |
+  Hawiya AI — sovereign, on-premise identity intelligence platform.
+  See docs/deployment/kubernetes.md for the full deployment guide.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/himkhanna/hawiya-ai
+maintainers:
+  - name: Hawiya AI core team
+keywords:
+  - identity
+  - passport
+  - ocr
+  - on-premise
+  - sovereign
