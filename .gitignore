@@ -38,3 +38,6 @@ tests/fixtures/real/
 # Local DB
 *.sqlite
 *.db
+
+# Local docker-compose overrides (per-machine port remaps, etc.)
+deploy/docker-compose.override.yml

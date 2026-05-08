@@ -125,6 +125,13 @@ class PersonService(ServiceBase):
             output_summary={"person_uuid": str(person.person_uuid), "action": "created"},
             decision="created",
         )
+
+        # Newly-created Person has unloaded relationships. Refresh so the
+        # response serializer can iterate `identifiers` / `name_variants`
+        # without triggering a sync lazy-load (MissingGreenlet) inside the
+        # async session.
+        await self.session.flush()
+        await self.session.refresh(person, ["identifiers", "name_variants"])
         return person
 
 

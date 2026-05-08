@@ -8,11 +8,10 @@ from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import DateTime, Float, String, func
-from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from hawiya.models.base import Base
+from hawiya.models.base import Base, enum_column
 
 
 class MatchType(StrEnum):
@@ -44,19 +43,19 @@ class MatchDecision(Base):
     candidate_a: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     candidate_b: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     match_type: Mapped[MatchType] = mapped_column(
-        SAEnum(MatchType, name="match_type", native_enum=True),
+        enum_column(MatchType, name="match_type"),
         nullable=False,
     )
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     features: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     decision: Mapped[MatchDecisionValue] = mapped_column(
-        SAEnum(MatchDecisionValue, name="match_decision_value", native_enum=True),
+        enum_column(MatchDecisionValue, name="match_decision_value"),
         nullable=False,
     )
     reviewed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     review_outcome: Mapped[ReviewOutcome | None] = mapped_column(
-        SAEnum(ReviewOutcome, name="review_outcome", native_enum=True),
+        enum_column(ReviewOutcome, name="review_outcome"),
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(

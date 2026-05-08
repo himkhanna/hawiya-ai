@@ -8,11 +8,10 @@ from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import DateTime, String, func
-from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from hawiya.models.base import Base
+from hawiya.models.base import Base, enum_column
 
 
 class TenantStatus(StrEnum):
@@ -29,7 +28,7 @@ class Tenant(Base):
     )
     tenant_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     status: Mapped[TenantStatus] = mapped_column(
-        SAEnum(TenantStatus, name="tenant_status", native_enum=True),
+        enum_column(TenantStatus, name="tenant_status"),
         default=TenantStatus.ACTIVE,
         nullable=False,
     )

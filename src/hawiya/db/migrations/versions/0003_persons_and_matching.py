@@ -25,6 +25,10 @@ def upgrade() -> None:
     # cluster's contrib package; on Postgres 16 they are preloaded.
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
     op.execute("CREATE EXTENSION IF NOT EXISTS unaccent;")
+    # btree_gin is required because the trigram GIN indexes below combine
+    # tenant_id (UUID, no default GIN operator class) with name columns
+    # (gin_trgm_ops). Without btree_gin the index creation fails.
+    op.execute("CREATE EXTENSION IF NOT EXISTS btree_gin;")
 
     sex = sa.Enum("M", "F", "X", name="sex")
     person_status = sa.Enum("active", "merged", "archived", name="person_status")

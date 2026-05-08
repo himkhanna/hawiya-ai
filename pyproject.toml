@@ -92,7 +92,7 @@ ignore = [
 "src/hawiya/db/migrations/**" = ["E501", "N999"]
 # CLI scripts: print is the user-facing output channel; complexity
 # limits don't help readability of one-shot tools.
-"scripts/**" = ["T201", "PLR0912", "PLR0915", "PLR2004", "SIM117", "E501"]
+"scripts/**" = ["T201", "PLR0912", "PLR0915", "PLR2004", "SIM117", "E501", "PLC0415", "BLE001"]
 # FastAPI's standard pattern uses Depends/File/Form in argument defaults.
 "src/hawiya/api/**" = ["B008"]
 # This module deliberately contains Arabic letters in strings, comments,

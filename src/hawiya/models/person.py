@@ -8,12 +8,11 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Date, DateTime, String, func
-from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from hawiya.extractors.types import Sex
-from hawiya.models.base import Base
+from hawiya.models.base import Base, enum_column
 
 if TYPE_CHECKING:
     from hawiya.models.person_identifier import PersonIdentifier
@@ -41,11 +40,11 @@ class Person(Base):
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
     nationality: Mapped[str | None] = mapped_column(String(3), nullable=True)
     sex: Mapped[Sex | None] = mapped_column(
-        SAEnum(Sex, name="sex", native_enum=True),
+        enum_column(Sex, name="sex"),
         nullable=True,
     )
     status: Mapped[PersonStatus] = mapped_column(
-        SAEnum(PersonStatus, name="person_status", native_enum=True),
+        enum_column(PersonStatus, name="person_status"),
         default=PersonStatus.ACTIVE,
         nullable=False,
     )

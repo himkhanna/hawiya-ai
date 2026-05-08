@@ -6,22 +6,12 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import (
-    DateTime,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    func,
-)
-from sqlalchemy import (
-    Enum as SAEnum,
-)
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from hawiya.extractors.types import ChecksumStatus, DocumentType, ProcessingPath
-from hawiya.models.base import Base
+from hawiya.models.base import Base, enum_column
 
 
 class DocumentExtraction(Base):
@@ -38,17 +28,17 @@ class DocumentExtraction(Base):
     consumer_request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     document_type: Mapped[DocumentType] = mapped_column(
-        SAEnum(DocumentType, name="document_type", native_enum=True),
+        enum_column(DocumentType, name="document_type"),
         nullable=False,
     )
     extracted_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     confidence_per_field: Mapped[dict[str, float]] = mapped_column(JSONB, nullable=False)
     checksum_status: Mapped[ChecksumStatus] = mapped_column(
-        SAEnum(ChecksumStatus, name="checksum_status", native_enum=True),
+        enum_column(ChecksumStatus, name="checksum_status"),
         nullable=False,
     )
     processing_path: Mapped[ProcessingPath] = mapped_column(
-        SAEnum(ProcessingPath, name="processing_path", native_enum=True),
+        enum_column(ProcessingPath, name="processing_path"),
         nullable=False,
     )
     processing_time_ms: Mapped[int] = mapped_column(Integer, nullable=False)

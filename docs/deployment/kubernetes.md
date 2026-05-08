@@ -61,6 +61,7 @@ Required setup once the database is reachable:
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS unaccent;
+CREATE EXTENSION IF NOT EXISTS btree_gin;  -- needed by composite GIN indexes
 -- pgvector is Phase 2 but no harm enabling now:
 CREATE EXTENSION IF NOT EXISTS vector;
 ```

@@ -8,11 +8,10 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, String, func
-from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from hawiya.models.base import Base
+from hawiya.models.base import Base, enum_column
 
 if TYPE_CHECKING:
     from hawiya.models.person import Person
@@ -43,7 +42,7 @@ class PersonIdentifier(Base):
         nullable=False,
     )
     identifier_type: Mapped[IdentifierType] = mapped_column(
-        SAEnum(IdentifierType, name="identifier_type", native_enum=True),
+        enum_column(IdentifierType, name="identifier_type"),
         nullable=False,
     )
     identifier_value: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -54,7 +53,7 @@ class PersonIdentifier(Base):
     source: Mapped[str | None] = mapped_column(String(64), nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[IdentifierStatus] = mapped_column(
-        SAEnum(IdentifierStatus, name="identifier_status", native_enum=True),
+        enum_column(IdentifierStatus, name="identifier_status"),
         default=IdentifierStatus.ACTIVE,
         nullable=False,
     )
