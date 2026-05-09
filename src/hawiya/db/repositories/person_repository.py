@@ -108,26 +108,23 @@ class PersonRepository:
         if not query or not query.strip():
             return []
         q = query.strip()
-        # `similarity()` is from pg_trgm; falls back to plain ILIKE if the
-        # extension isn't available (shouldn't happen in our migrations).
+        # Score = max(ar_similarity, en_similarity). pg_trgm.similarity()
+        # returns 0 (not NULL) for unrelated strings, so COALESCE would
+        # short-circuit on the first non-null value even when it's zero.
+        # GREATEST + COALESCE-to-zero handles both "no match in this script"
+        # and "field is NULL" correctly.
+        score = func.greatest(
+            func.coalesce(func.similarity(Person.canonical_name_ar, q), 0.0),
+            func.coalesce(func.similarity(Person.canonical_name_en, q), 0.0),
+        )
         stmt = (
             select(Person)
             .where(
                 Person.tenant_id == tenant_id,
                 Person.status == PersonStatus.ACTIVE,
-                func.coalesce(
-                    func.similarity(Person.canonical_name_ar, q),
-                    func.similarity(Person.canonical_name_en, q),
-                    0.0,
-                )
-                > SIMILARITY_THRESHOLD,
+                score > SIMILARITY_THRESHOLD,
             )
-            .order_by(
-                func.greatest(
-                    func.coalesce(func.similarity(Person.canonical_name_ar, q), 0.0),
-                    func.coalesce(func.similarity(Person.canonical_name_en, q), 0.0),
-                ).desc()
-            )
+            .order_by(score.desc())
             .limit(limit)
         )
         return list((await self.session.execute(stmt)).scalars().all())

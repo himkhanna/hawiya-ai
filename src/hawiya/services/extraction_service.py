@@ -14,6 +14,7 @@ LLM branches are placeholders for Phase 2.
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 import uuid
 from typing import Any
@@ -157,12 +158,30 @@ class ExtractionService(ServiceBase):
         )
 
 
+_MULTISPACE_RE = re.compile(r"\s{2,}")
+
+
+def _strip_ocr_junk(name: str) -> str:
+    """Drop tokens after 2+ consecutive whitespace.
+
+    The MRZ name format uses single ``<`` to separate sub-tokens of a
+    given name (``JEAN<PIERRE`` -> ``JEAN PIERRE``). Multiple ``<`` is
+    filler. When OCR mis-reads filler chars it produces stray short
+    tokens after a long whitespace run (``MOHAMED            KK``); a
+    legitimate name never has 2+ consecutive spaces, so anything past
+    that boundary is noise.
+    """
+    if not name:
+        return name
+    return _MULTISPACE_RE.split(name.strip())[0]
+
+
 def _fields_from_parsed(p: ParsedMRZ) -> dict[str, str | None]:
     return {
         "document_type": p.document_type,
         "issuing_country": p.issuing_country,
-        "surname": p.surname,
-        "given_names": p.given_names,
+        "surname": _strip_ocr_junk(p.surname),
+        "given_names": _strip_ocr_junk(p.given_names),
         "document_number": p.document_number,
         "nationality": p.nationality,
         "date_of_birth": p.date_of_birth.isoformat() if p.date_of_birth else None,

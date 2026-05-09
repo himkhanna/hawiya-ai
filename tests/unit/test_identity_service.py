@@ -51,6 +51,15 @@ class FakeSession:
     async def flush(self) -> None:
         return None
 
+    async def refresh(self, obj: Any, attribute_names: list[str] | None = None) -> None:
+        # Stand-in for AsyncSession.refresh — the real one populates
+        # relationships from the DB. Our tests use stub repos that don't
+        # have backing rows; we initialise the requested attrs to empty
+        # lists so the response serializer can iterate them.
+        for attr in attribute_names or ():
+            if not hasattr(obj, attr) or getattr(obj, attr, None) is None:
+                setattr(obj, attr, [])
+
     async def execute(self, stmt: Any, params: Any = None) -> Any:
         # IdentityService issues an UPDATE on document_extractions; we don't
         # need to apply it for service-level assertions.

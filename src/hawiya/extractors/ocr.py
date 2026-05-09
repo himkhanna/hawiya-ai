@@ -70,9 +70,15 @@ class PassportEyeAdapter:
         if result is None:
             raise NoMRZFoundError("no MRZ region found in image")
 
-        # PassportEye returns its own MRZ object; we want the raw 2 lines.
-        # Newer versions expose `.mrz_code` (joined string with \n).
-        raw = getattr(result, "mrz_code", None) or getattr(result, "raw_text", None)
+        # PassportEye stows the raw 2-line OCR output on result.aux. The
+        # MRZ object itself doesn't expose it as a top-level attribute.
+        # Older releases shipped `.mrz_code`; we keep that as a fallback.
+        aux = getattr(result, "aux", None) or {}
+        raw = (
+            aux.get("raw_text")
+            or aux.get("text")
+            or getattr(result, "mrz_code", None)
+        )
         if not raw:
             raise NoMRZFoundError("OCR returned no MRZ text")
 

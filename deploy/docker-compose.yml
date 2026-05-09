@@ -33,6 +33,9 @@ services:
       HAWIYA_DATABASE_URL_SYNC: postgresql+psycopg://hawiya:hawiya@postgres:5432/hawiya
       HAWIYA_DEV_BEARER_TOKEN: dev
       HAWIYA_OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4317
+      # PassportEye imports matplotlib transitively; its config-dir lookup
+      # fails on read-only /app, so point it at /tmp.
+      MPLCONFIGDIR: /tmp
     depends_on:
       postgres:
         condition: service_healthy
