@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from hawiya import __version__
@@ -49,12 +50,30 @@ def create_app() -> FastAPI:
 
     # Order matters: FastAPI prepends to user_middleware, so the LAST
     # add_middleware call ends up OUTERMOST. Desired request flow:
-    #   Tenancy (auth + tenant context) → RateLimit → Idempotency → app.
-    # That way the limiter only sees authenticated requests, and a cached
-    # idempotent response doesn't consume a rate-limit token on replay.
+    #   CORS (preflight) -> Tenancy (auth + context) -> RateLimit ->
+    #   Idempotency -> app.
+    # CORS must be outermost so it answers OPTIONS preflights before
+    # tenancy gets a chance to 401 them.
     app.add_middleware(IdempotencyMiddleware)
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(TenancyMiddleware)
+
+    settings = get_settings()
+    if settings.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+                "X-Tenant-ID",
+                "X-Request-ID",
+                "Idempotency-Key",
+            ],
+            expose_headers=["X-Request-ID"],
+        )
 
     @app.exception_handler(Exception)
     async def _unhandled_exception(

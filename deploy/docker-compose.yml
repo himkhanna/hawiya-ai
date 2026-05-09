@@ -36,6 +36,9 @@ services:
       # PassportEye imports matplotlib transitively; its config-dir lookup
       # fails on read-only /app, so point it at /tmp.
       MPLCONFIGDIR: /tmp
+      # Allow the demo UI (Vite dev server) to call the API. Empty in
+      # production deployments — UIs there are same-origin behind an Ingress.
+      HAWIYA_CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
     depends_on:
       postgres:
         condition: service_healthy

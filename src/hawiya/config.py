@@ -64,6 +64,17 @@ class Settings(BaseSettings):
         "Per-tenant overrides live in Tenant.config.",
     )
 
+    # ------------------------------------------------------------------ CORS
+    cors_origins: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Browser origins permitted to call the API. Empty disables CORS "
+            "(production default — UIs are same-origin behind an Ingress). "
+            "For the dev demo UI, set e.g. "
+            'HAWIYA_CORS_ORIGINS=["http://localhost:5173"].'
+        ),
+    )
+
     @property
     def is_prod(self) -> bool:
         return self.env is Environment.PROD
