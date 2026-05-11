@@ -1,0 +1,364 @@
+{
+  "info": {
+    "_postman_id": "8a7d4e10-5e1f-4f4b-9f4c-1c3a4b5d6e7f",
+    "name": "Hawiya AI — WizSM integration",
+    "description": "Endpoints WizSM needs to integrate against Hawiya AI for the Diwan deployment.\n\n**Scope.** Hawiya AI extracts structured identity data from passport scans. WizSM runs its own duplicate-check against the Diwan registry, so this collection deliberately omits Hawiya's `/v1/identity/resolve` and `/v1/persons/*` endpoints — those are for consumers without their own registry.\n\n**Endpoints**\n\n| Method | Path | Purpose |\n|--------|------|---------|\n| GET | `/v1/health` | Liveness — wire to your monitoring |\n| GET | `/v1/ready` | Readiness — checks Postgres reachability |\n| POST | `/v1/documents/extract` | Extract structured fields from a passport image |\n\n**Auth (Phase 1).** Bearer token + `X-Tenant-ID` header. The bearer is a stub for the pilot; production will replace with mTLS or OAuth2 — Hawiya will tell WizSM which before go-live.\n\n**Required headers on every authenticated request:**\n- `Authorization: Bearer <token>`\n- `X-Tenant-ID: <uuid>` — your tenant id from the Hawiya team\n- `X-Request-ID: <uuid>` (optional; generated server-side if absent and echoed in the response)\n- `Idempotency-Key: <opaque>` (optional but recommended for `POST` retries)\n\n**Rate limit.** 100 requests per minute per tenant on `/v1/documents/extract`. Configurable per tenant. 429 with `Retry-After` header when exceeded.\n\n**Errors.** Every non-2xx response uses the same envelope:\n```json\n{\n  \"error\": {\n    \"code\": \"DOCUMENT_UNREADABLE\",\n    \"message\": \"...\",\n    \"details\": { },\n    \"trace_id\": \"...\"\n  }\n}\n```\n\nCommon codes you'll see: `UNAUTHENTICATED`, `TENANT_REQUIRED`, `TENANT_INVALID`, `EMPTY_UPLOAD`, `PAYLOAD_TOO_LARGE`, `UNSUPPORTED_DOCUMENT`, `DOCUMENT_UNREADABLE`, `OCR_UNAVAILABLE`, `RATE_LIMITED`, `IDEMPOTENCY_KEY_CONFLICT`, `INTERNAL_ERROR`.\n\n**Setup.** Use the `Hawiya AI — Dev` environment in this folder. Set `tenant_id` to the UUID Hawiya provides; leave `bearer_token` as `dev` for the pilot.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{bearer_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8010",
+      "type": "string",
+      "description": "Override per environment (use the Postman environment file rather than editing this)."
+    },
+    {
+      "key": "tenant_id",
+      "value": "",
+      "type": "string",
+      "description": "Tenant UUID assigned by the Hawiya AI team."
+    },
+    {
+      "key": "bearer_token",
+      "value": "dev",
+      "type": "string",
+      "description": "Bearer token. Phase 1 stub; production will use mTLS or OAuth2."
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "description": "Liveness + readiness checks. No auth required.",
+      "item": [
+        {
+          "name": "GET /v1/health — liveness",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/health",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "health"]
+            },
+            "description": "Cheap liveness probe — returns 200 if the process is up. Wire this to your monitoring (1-second interval is fine).\n\n**No auth required.** Safe to call from anywhere on the network.\n\n**Response (200):**\n```json\n{\n  \"status\": \"ok\",\n  \"version\": \"0.1.0\"\n}\n```"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/v1/health",
+                  "host": ["{{base_url}}"],
+                  "path": ["v1", "health"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {"key": "Content-Type", "value": "application/json"}
+              ],
+              "body": "{\"status\":\"ok\",\"version\":\"0.1.0\"}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('status=ok', function () {",
+                  "  pm.expect(pm.response.json().status).to.eql('ok');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /v1/ready — readiness (DB)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/ready",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "ready"]
+            },
+            "description": "Deeper check than `/v1/health` — also pings Postgres. Use as the Kubernetes readiness probe upstream of any deploy of your integration.\n\n**No auth required.**\n\n**Response (200):**\n```json\n{\n  \"status\": \"ok\",\n  \"checks\": { \"database\": \"ok\" }\n}\n```\n\nReturns 200 even if a check fails (with `status: degraded`); inspect `checks` for detail."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('database is ok', function () {",
+                  "  pm.expect(pm.response.json().checks.database).to.eql('ok');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Document extraction",
+      "description": "The endpoint WizSM calls for every passport scan.",
+      "item": [
+        {
+          "name": "POST /v1/documents/extract — happy path",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenant_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "wizsm-{{$timestamp}}-{{$randomUUID}}",
+                "type": "text",
+                "description": "Recommended. Same key + same body within 24h returns the cached response. Same key + different body returns 422 IDEMPOTENCY_KEY_CONFLICT."
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "Passport image — JPEG, PNG, TIFF, or PDF. Max 10 MB. Pick a file when sending."
+                },
+                {
+                  "key": "consumer_request_id",
+                  "value": "wizsm-counter-7-1715347200",
+                  "type": "text",
+                  "description": "Optional. WizSM's own correlation id; echoed in audit_log so cross-system traceability works."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/documents/extract",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "documents", "extract"]
+            },
+            "description": "**The endpoint WizSM calls for every passport scan.**\n\nUpload the passport image as `file` in a `multipart/form-data` body. Hawiya AI runs PassportEye + Tesseract over the MRZ region, validates all five ICAO 9303 checksums, and returns structured fields.\n\n**Required:**\n- `Authorization: Bearer <token>`\n- `X-Tenant-ID: <uuid>`\n- `file` (multipart) — passport image\n\n**Optional:**\n- `consumer_request_id` (multipart text) — your correlation id, echoed in audit log\n- `Idempotency-Key` header — recommended on retries\n\n**Response (200):**\n```json\n{\n  \"extraction_id\": \"uuid\",\n  \"document_type\": \"passport\",\n  \"fields\": {\n    \"document_type\": \"P\",\n    \"issuing_country\": \"ARE\",\n    \"document_number\": \"P1234567\",\n    \"surname\": \"ALMANSOORI\",\n    \"given_names\": \"MOHAMED\",\n    \"nationality\": \"ARE\",\n    \"date_of_birth\": \"1990-01-12\",\n    \"sex\": \"M\",\n    \"date_of_expiry\": \"2030-01-01\",\n    \"personal_number\": null\n  },\n  \"confidence_per_field\": {\n    \"document_number\": 0.99,\n    \"date_of_birth\": 0.99,\n    \"date_of_expiry\": 0.99,\n    \"surname\": 0.85,\n    \"given_names\": 0.85,\n    \"sex\": 0.95\n  },\n  \"checksum_status\": \"all_pass\",\n  \"processing_path\": \"mrz_only\",\n  \"processing_time_ms\": 287\n}\n```\n\n**Error codes** (from the shared error envelope):\n- `400 EMPTY_UPLOAD` — file is empty\n- `413 PAYLOAD_TOO_LARGE` — file > 10 MB\n- `415 UNSUPPORTED_DOCUMENT` — bytes don't look like JPEG/PNG/TIFF/PDF\n- `422 DOCUMENT_UNREADABLE` — OCR couldn't find or parse the MRZ\n- `503 OCR_UNAVAILABLE` — Tesseract backend down — retry with backoff"
+          },
+          "response": [
+            {
+              "name": "200 OK — UAE passport",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {"key": "X-Tenant-ID", "value": "{{tenant_id}}"},
+                  {"key": "Idempotency-Key", "value": "demo-key-1"}
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": ""}
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}/v1/documents/extract",
+                  "host": ["{{base_url}}"],
+                  "path": ["v1", "documents", "extract"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {"key": "Content-Type", "value": "application/json"},
+                {"key": "X-Request-ID", "value": "5b8e..."}
+              ],
+              "body": "{\n  \"extraction_id\": \"32105d10-e558-49fa-8604-7b059c45ce68\",\n  \"document_type\": \"passport\",\n  \"fields\": {\n    \"document_type\": \"P\",\n    \"issuing_country\": \"ARE\",\n    \"document_number\": \"P1234567\",\n    \"surname\": \"ALMANSOORI\",\n    \"given_names\": \"MOHAMED\",\n    \"nationality\": \"ARE\",\n    \"date_of_birth\": \"1990-01-12\",\n    \"sex\": \"M\",\n    \"date_of_expiry\": \"2030-01-01\",\n    \"personal_number\": null\n  },\n  \"confidence_per_field\": {\n    \"document_number\": 0.99,\n    \"date_of_birth\": 0.99,\n    \"date_of_expiry\": 0.99,\n    \"personal_number\": 0.99,\n    \"surname\": 0.85,\n    \"given_names\": 0.85,\n    \"issuing_country\": 0.85,\n    \"nationality\": 0.85,\n    \"sex\": 0.95\n  },\n  \"checksum_status\": \"all_pass\",\n  \"processing_path\": \"mrz_only\",\n  \"processing_time_ms\": 287\n}"
+            },
+            {
+              "name": "415 UNSUPPORTED_DOCUMENT",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {"key": "X-Tenant-ID", "value": "{{tenant_id}}"}
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": ""}
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}/v1/documents/extract",
+                  "host": ["{{base_url}}"],
+                  "path": ["v1", "documents", "extract"]
+                }
+              },
+              "status": "Unsupported Media Type",
+              "code": 415,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"UNSUPPORTED_DOCUMENT\",\n    \"message\": \"unrecognised file format (declared content-type: 'text/plain')\",\n    \"details\": {},\n    \"trace_id\": \"5b8e6e2a-..\"\n  }\n}"
+            },
+            {
+              "name": "422 DOCUMENT_UNREADABLE",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {"key": "X-Tenant-ID", "value": "{{tenant_id}}"}
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {"key": "file", "type": "file", "src": ""}
+                  ]
+                },
+                "url": {
+                  "raw": "{{base_url}}/v1/documents/extract",
+                  "host": ["{{base_url}}"],
+                  "path": ["v1", "documents", "extract"]
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\n  \"error\": {\n    \"code\": \"DOCUMENT_UNREADABLE\",\n    \"message\": \"no MRZ region found in image\",\n    \"details\": {},\n    \"trace_id\": \"5b8e6e2a-..\"\n  }\n}"
+            },
+            {
+              "name": "429 RATE_LIMITED",
+              "originalRequest": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{base_url}}/v1/documents/extract",
+                  "host": ["{{base_url}}"],
+                  "path": ["v1", "documents", "extract"]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {"key": "Retry-After", "value": "12"}
+              ],
+              "body": "{\n  \"error\": {\n    \"code\": \"RATE_LIMITED\",\n    \"message\": \"Per-tenant rate limit exceeded.\",\n    \"details\": {\"retry_after_seconds\": 12},\n    \"trace_id\": \"5b8e6e2a-..\"\n  }\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK with extraction id', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.extraction_id).to.be.a('string');",
+                  "  pm.expect(body.document_type).to.eql('passport');",
+                  "  pm.expect(body.fields).to.be.an('object');",
+                  "  pm.expect(body.checksum_status).to.be.oneOf(['all_pass','partial','all_fail','n/a']);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /v1/documents/extract — non-image (415 example)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "X-Tenant-ID", "value": "{{tenant_id}}", "type": "text"},
+              {"key": "Content-Type", "value": "multipart/form-data", "type": "text", "disabled": true}
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "value": "not an image",
+                  "type": "text",
+                  "description": "Send any non-image file to see the 415 error envelope."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/documents/extract",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "documents", "extract"]
+            },
+            "description": "Trigger the `415 UNSUPPORTED_DOCUMENT` path. Useful for verifying your error-handling code without crafting a bad image."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('415 UNSUPPORTED_DOCUMENT', function () {",
+                  "  pm.response.to.have.status(415);",
+                  "  pm.expect(pm.response.json().error.code).to.eql('UNSUPPORTED_DOCUMENT');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /v1/documents/extract — without tenant (401 example)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "file", "type": "file", "src": ""}
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/documents/extract",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "documents", "extract"]
+            },
+            "description": "Trigger the `401 TENANT_REQUIRED` path by omitting the `X-Tenant-ID` header. Useful for verifying that your client surfaces auth errors clearly to operators."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 TENANT_REQUIRED', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql('TENANT_REQUIRED');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,10 +1,10 @@
-import type { ResolveState } from "../App";
+import { isExtractResult, type CallState } from "../App";
 import type { Scenario } from "../scenarios";
 import type { ResolveResult } from "../api";
 
 interface Props {
   scenario: Scenario;
-  state: ResolveState;
+  state: CallState;
 }
 
 export default function ResolutionPanel({ scenario, state }: Props) {
@@ -18,7 +18,9 @@ export default function ResolutionPanel({ scenario, state }: Props) {
       </div>
 
       {state.status === "idle" && <Idle scenario={scenario} />}
-      {state.status === "success" && <ResultCard result={state.result} />}
+      {state.status === "success" && !isExtractResult(state.result) && (
+        <ResultCard result={state.result} />
+      )}
       {state.status === "loading" && (
         <div className="mt-10 text-center text-xs text-ink/40">
           waiting for extraction…

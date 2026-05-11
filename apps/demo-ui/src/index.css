@@ -9,6 +9,76 @@ body,
 }
 
 body {
+  font-family: "Inter Tight", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* MRZ scan-line overlay used during /v1/identity/resolve calls. */
+.scan-overlay {
+  position: relative;
+  overflow: hidden;
+}
+.scan-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(184, 149, 74, 0) 0%,
+    rgba(184, 149, 74, 0.45) 50%,
+    rgba(184, 149, 74, 0) 100%
+  );
+  height: 14%;
+  animation: scan-line 1.6s linear infinite;
+  pointer-events: none;
+}
+@keyframes scan-line {
+  0% {
+    transform: translateY(-20%);
+  }
+  100% {
+    transform: translateY(720%);
+  }
+}
+
+/* Staggered field reveal — applied via inline style with --i index. */
+.field-reveal {
+  opacity: 0;
+  transform: translateY(4px);
+  animation: field-in 280ms ease-out forwards;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+@keyframes field-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Checksum boxes flip green sequentially via inline --i. */
+.checksum-flip {
+  background: rgba(10, 14, 26, 0.06);
+  color: rgba(10, 14, 26, 0.4);
+  animation: checksum-flip 280ms ease-out forwards;
+  animation-delay: calc(800ms + var(--i, 0) * 180ms);
+}
+@keyframes checksum-flip {
+  to {
+    background: rgba(45, 95, 93, 0.18);
+    color: #2d5f5d;
+  }
+}
+
+/* MRZ caret blink during typing animation. */
+.mrz-caret::after {
+  content: "▌";
+  margin-left: 1px;
+  color: #b8954a;
+  animation: caret-blink 0.9s steps(1, end) infinite;
+}
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
 }

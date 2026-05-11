@@ -1,31 +1,61 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ApiCallError,
   config,
+  extractDocument,
   resolveIdentity,
   type ApiError,
+  type ExtractResult,
   type ResolveResult,
 } from "./api";
-import { SCENARIOS, loadScenarioImage, type Scenario } from "./scenarios";
+import {
+  scenariosFor,
+  loadScenarioImage,
+  type Mode,
+  type Scenario,
+} from "./scenarios";
 import Header from "./components/Header";
-import CapturePanel from "./components/CapturePanel";
+import CapturePanel, { type Capture } from "./components/CapturePanel";
 import ExtractionPanel from "./components/ExtractionPanel";
 import ResolutionPanel from "./components/ResolutionPanel";
+import ResponsePanel from "./components/ResponsePanel";
 import Footer from "./components/Footer";
 
-export type ResolveState =
+export type CallState =
   | { status: "idle" }
   | { status: "loading"; startedAt: number }
-  | { status: "success"; result: ResolveResult; durationMs: number }
+  | {
+      status: "success";
+      result: ResolveResult | ExtractResult;
+      durationMs: number;
+    }
   | { status: "error"; error: ApiError; httpStatus: number };
 
+// Type guard so panels can switch on the response shape.
+export function isExtractResult(
+  r: ResolveResult | ExtractResult
+): r is ExtractResult {
+  return (r as ExtractResult).checksum_status !== undefined;
+}
+
+const DEFAULT_MODE: Mode = "wizsm";
+
 export default function App() {
-  const [scenario, setScenario] = useState<Scenario>(SCENARIOS[0]);
-  const [state, setState] = useState<ResolveState>({ status: "idle" });
+  const [mode, setMode] = useState<Mode>(DEFAULT_MODE);
+  const visible = useMemo(() => scenariosFor(mode), [mode]);
+  const [scenario, setScenario] = useState<Scenario>(visible[0]);
+  // Capture: either a built-in scenario sample or a user-uploaded file.
+  const [capture, setCapture] = useState<Capture>({ kind: "sample" });
+  const [state, setState] = useState<CallState>({ status: "idle" });
   const [reachable, setReachable] = useState<boolean | null>(null);
 
-  // Probe /v1/health on mount so the live indicator in the header is
-  // honest. Re-probe whenever the user changes scenarios (cheap).
+  // Reset to first scenario + sample mode whenever the view toggles.
+  useEffect(() => {
+    setScenario(scenariosFor(mode)[0]);
+    setCapture({ kind: "sample" });
+    setState({ status: "idle" });
+  }, [mode]);
+
   useEffect(() => {
     let cancelled = false;
     fetch(`${config.baseUrl}/v1/health`)
@@ -36,30 +66,36 @@ export default function App() {
     };
   }, []);
 
-  // Reset the result panel whenever the user switches scenarios.
   function handleScenarioChange(next: Scenario): void {
     setScenario(next);
+    setCapture({ kind: "sample" });
     setState({ status: "idle" });
   }
 
   async function handleScan(): Promise<void> {
-    setState({ status: "loading", startedAt: performance.now() });
+    const startedAt = performance.now();
+    setState({ status: "loading", startedAt });
     try {
-      const blob = await loadScenarioImage(scenario);
-      const result = await resolveIdentity(blob, `${scenario.id}.jpg`);
-      const durationMs = Math.round(
-        performance.now() -
-          (state.status === "loading" ? state.startedAt : performance.now())
-      );
+      let blob: Blob;
+      let filename: string;
+      if (capture.kind === "upload") {
+        blob = capture.file;
+        filename = capture.name;
+      } else {
+        blob = await loadScenarioImage(scenario);
+        filename = `${scenario.id}.jpg`;
+      }
+      const result =
+        mode === "wizsm"
+          ? await extractDocument(blob, filename)
+          : await resolveIdentity(blob, filename);
+      const durationMs = Math.round(performance.now() - startedAt);
       setState({ status: "success", result, durationMs });
     } catch (e) {
       if (e instanceof ApiCallError) {
         setState({
           status: "error",
-          error: e.body.error ?? {
-            code: "UNKNOWN",
-            message: e.message,
-          },
+          error: e.body.error ?? { code: "UNKNOWN", message: e.message },
           httpStatus: e.status,
         });
       } else {
@@ -75,7 +111,9 @@ export default function App() {
   return (
     <div className="flex h-screen flex-col bg-paper text-ink">
       <Header
-        scenarios={SCENARIOS}
+        mode={mode}
+        onModeChange={setMode}
+        scenarios={visible}
         active={scenario}
         onScenarioChange={handleScenarioChange}
         reachable={reachable}
@@ -84,18 +122,31 @@ export default function App() {
         <div className="col-span-3 overflow-y-auto bg-paper p-6">
           <CapturePanel
             scenario={scenario}
+            capture={capture}
+            onCaptureChange={(c) => {
+              setCapture(c);
+              setState({ status: "idle" });
+            }}
             onScan={handleScan}
             busy={state.status === "loading"}
           />
         </div>
         <div className="col-span-5 overflow-y-auto bg-paper p-6">
-          <ExtractionPanel scenario={scenario} state={state} />
+          <ExtractionPanel
+            scenario={scenario}
+            capture={capture}
+            state={state}
+          />
         </div>
         <div className="col-span-4 overflow-y-auto bg-paper p-6">
-          <ResolutionPanel scenario={scenario} state={state} />
+          {mode === "wizsm" ? (
+            <ResponsePanel scenario={scenario} state={state} />
+          ) : (
+            <ResolutionPanel scenario={scenario} state={state} />
+          )}
         </div>
       </main>
-      <Footer state={state} />
+      <Footer state={state} mode={mode} />
     </div>
   );
 }

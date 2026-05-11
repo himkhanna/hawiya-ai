@@ -12,16 +12,11 @@ export default {
         teal: "#2D5F5D",
       },
       fontFamily: {
-        // Tier 1 uses system fonts; Tier 2 swaps in Fraunces / Inter Tight / Amiri.
-        sans: [
-          "system-ui",
-          "-apple-system",
-          "Segoe UI",
-          "Roboto",
-          "sans-serif",
-        ],
-        mono: ["ui-monospace", "Cascadia Mono", "Consolas", "monospace"],
-        serif: ["Georgia", "serif"],
+        // Brand fonts per demo-ui.md §4 (self-hosted via @fontsource).
+        sans: ['"Inter Tight"', "system-ui", "sans-serif"],
+        serif: ['"Fraunces"', "Georgia", "serif"],
+        mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
+        arabic: ['"Amiri"', '"Times New Roman"', "serif"],
       },
     },
   },
