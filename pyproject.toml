@@ -50,6 +50,9 @@ ocr = [
     # system binary — install separately on each target OS.
     "passporteye>=2.2",
     "Pillow>=10.4",
+    # PyMuPDF rasterises PDF pages so we can OCR scanned passport PDFs.
+    # Pure-Python install (no extra system binaries).
+    "pymupdf>=1.24",
 ]
 
 [tool.hatch.build.targets.wheel]

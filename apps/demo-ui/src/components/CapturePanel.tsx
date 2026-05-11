@@ -16,11 +16,9 @@ interface Props {
   busy: boolean;
 }
 
-// Backend accepts JPEG / PNG / TIFF in Phase 1. PDF and HEIC are
-// rejected server-side with a clear message; we mirror that here so
-// users don't get a misleading "ready to scan" preview for a file the
-// backend will refuse.
-const ACCEPTED = "image/jpeg,image/png,image/tiff";
+// Backend accepts JPEG / PNG / TIFF / PDF. PDFs are rasterised (page 1)
+// before OCR. HEIC is rejected server-side with a clear message.
+const ACCEPTED = "image/jpeg,image/png,image/tiff,application/pdf";
 const MAX_BYTES = 10 * 1024 * 1024;
 
 export default function CapturePanel({
@@ -56,7 +54,7 @@ export default function CapturePanel({
       !ACCEPTED.split(",").some((t) => file.type === t || file.type === "")
     ) {
       setError(
-        `Unsupported file type: ${file.type || "unknown"}. Use JPEG, PNG, or TIFF.`
+        `Unsupported file type: ${file.type || "unknown"}. Use JPEG, PNG, TIFF, or PDF.`
       );
       return;
     }
@@ -198,11 +196,23 @@ function UploadPane({
       {upload ? (
         <div className="my-4 space-y-3">
           <div className="overflow-hidden rounded border border-ink/10 bg-white shadow-sm">
-            <img
-              src={upload.previewUrl}
-              alt={upload.name}
-              className="block max-h-72 w-full object-contain"
-            />
+            {upload.file.type === "application/pdf" ? (
+              <div className="flex h-48 flex-col items-center justify-center bg-ink/5 p-4 text-center text-xs text-ink/60">
+                <div className="mb-1 font-mono uppercase tracking-wide text-ink/50">
+                  PDF
+                </div>
+                <div>
+                  PDFs are rasterised (page 1, 200 DPI) before OCR.
+                  Preview not shown — the backend reads it as-is.
+                </div>
+              </div>
+            ) : (
+              <img
+                src={upload.previewUrl}
+                alt={upload.name}
+                className="block max-h-72 w-full object-contain"
+              />
+            )}
           </div>
           <div className="flex items-center justify-between gap-2 text-xs">
             <div className="min-w-0 flex-1">
@@ -246,7 +256,7 @@ function UploadPane({
           </div>
           <div className="text-xs">or click to browse</div>
           <div className="mt-3 text-[11px] text-ink/40">
-            JPEG · PNG · TIFF · max 10 MB
+            JPEG · PNG · TIFF · PDF · max 10 MB
           </div>
         </div>
       )}

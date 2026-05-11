@@ -24,6 +24,11 @@ def test_detects_pdf() -> None:
     assert detect_format(b"%PDF-1.7\n") == "application/pdf"
 
 
+def test_classify_accepts_pdf() -> None:
+    # PDF is supported via PyMuPDF rasterisation in the OCR adapter.
+    assert classify(b"%PDF-1.7\nfoo") is DocumentType.PASSPORT
+
+
 def test_detects_tiff_little_endian() -> None:
     assert detect_format(b"II*\x00\x08\x00") == "image/tiff"
 
@@ -38,13 +43,6 @@ def test_unknown_format_returns_none() -> None:
 
 def test_classify_passport_for_jpeg() -> None:
     assert classify(b"\xff\xd8\xff\xe0\x00\x10JFIF") is DocumentType.PASSPORT
-
-
-def test_classify_rejects_pdf_until_phase_2() -> None:
-    # PDF is recognised but not supported yet (needs rasterisation).
-    # We want a clear "PDF not supported" message, not a generic one.
-    with pytest.raises(UnsupportedDocumentError, match="PDF"):
-        classify(b"%PDF-1.7\nfoo")
 
 
 def test_classify_rejects_heic_with_helpful_message() -> None:

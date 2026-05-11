@@ -66,11 +66,20 @@ class PassportEyeAdapter:
                 "and ensure Tesseract is on PATH."
             ) from e
 
+        # If the upload is a PDF (e.g. a scanned passport from an office
+        # scanner), rasterise its first page to JPEG bytes before the
+        # normal image pipeline. Passport scans are essentially always
+        # single-page; multi-page PDF support is a Phase 2 follow-up.
+        from hawiya.extractors.document_classifier import is_pdf  # noqa: PLC0415
+
+        if is_pdf(payload):
+            payload = self._rasterise_pdf(payload)
+
         # PassportEye 2.2.2's Loader can't read a numpy array or a
         # BytesIO directly — it always defers to scikit-image's
         # imageio plugin which needs a path-like input it can sniff a
         # format from. Cheap fix: decode the bytes with PIL (handles
-        # JPEG/PNG/TIFF/HEIC/etc.), re-encode as JPEG, and write to a
+        # JPEG/PNG/TIFF/etc.), re-encode as JPEG, and write to a
         # short-lived temp file that PassportEye reads happily.
         try:
             with Image.open(io.BytesIO(payload)) as pil_img:
@@ -124,3 +133,33 @@ class PassportEyeAdapter:
         line1 = lines[0].ljust(44, "<")[:44]
         line2 = lines[1].ljust(44, "<")[:44]
         return line1, line2
+
+    @staticmethod
+    def _rasterise_pdf(payload: bytes) -> bytes:
+        """Render the first page of a PDF to JPEG bytes at 200 DPI.
+
+        200 DPI gives the MRZ region enough resolution for Tesseract on
+        most scanned passports. Multi-page PDFs only have their first
+        page processed — passport scans are single-page in practice.
+        """
+        try:
+            import fitz  # type: ignore[import-not-found]  # noqa: PLC0415
+        except ImportError as e:
+            raise OCRUnavailableError(
+                "PDF input requires pymupdf — install with "
+                "`pip install hawiya-ai[ocr]`."
+            ) from e
+
+        try:
+            with fitz.open(stream=payload, filetype="pdf") as doc:
+                if doc.page_count == 0:
+                    raise NoMRZFoundError("PDF has no pages")
+                page = doc[0]
+                pix = page.get_pixmap(dpi=200)
+                return bytes(pix.tobytes("jpeg"))
+        except NoMRZFoundError:
+            raise
+        except Exception as e:
+            raise NoMRZFoundError(
+                f"could not rasterise PDF (file may be encrypted or corrupt): {e}"
+            ) from e
