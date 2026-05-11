@@ -47,7 +47,27 @@ class OCRAdapter(Protocol):
 
 
 class PassportEyeAdapter:
-    """Production OCR adapter using PassportEye (Tesseract under the hood)."""
+    """Production OCR adapter using PassportEye (Tesseract under the hood).
+
+    **Known limitation on real-world passport scans.** PassportEye 2.2.2
+    calls Tesseract with the default ``eng`` LSTM model plus a character
+    whitelist (``A-Z 0-9 < >``). That works well on clean scanner output
+    but mis-reads OCR-B glyphs on phone-camera shots:
+
+    - ``<`` filler chars get read as ``K`` / ``X`` (LSTM bias)
+    - ``I`` gets read as ``1`` in nationality codes
+    - ``O`` ↔ ``0`` substitutions
+
+    Three known mitigation paths, none of which are in Phase 1:
+
+    1. A Tesseract-5-format ``mrz.traineddata`` (the bundled PassportEye
+       file is Tesseract 3 era and 5's loader rejects it).
+    2. Image preprocessing (deskew + contrast enhancement) before OCR.
+    3. Switch to PaddleOCR for the MRZ region (Phase 2 visual zone work).
+
+    For the pilot, the customer's Regula scanner gives clean MRZ output
+    and avoids the issue end-to-end. Phone-camera shots are best-effort.
+    """
 
     def __init__(self, *, extra_tesseract_args: str = "") -> None:
         self._extra = extra_tesseract_args
@@ -132,7 +152,12 @@ class PassportEyeAdapter:
         # pad/trim each line to 44 chars so the parser can do its job.
         line1 = lines[0].ljust(44, "<")[:44]
         line2 = lines[1].ljust(44, "<")[:44]
-        return line1, line2
+
+        # Fix character-class OCR mistakes (e.g. nationality "1ND" -> "IND",
+        # DOB "9001I2" -> "900112"). See mrz.repair_mrz_chars for scope.
+        from hawiya.extractors.mrz import repair_mrz_chars  # noqa: PLC0415
+
+        return repair_mrz_chars(line1, line2)
 
     @staticmethod
     def _rasterise_pdf(payload: bytes) -> bytes:

@@ -55,6 +55,60 @@ DOB_FUTURE_SLACK = 1
 EXPIRY_CENTURY_CUTOFF = 50  # YY < cutoff → 20YY for expiry, else 19YY
 
 
+# Letter ↔ digit substitution tables for fixing OCR character-class
+# errors on MRZ fields where the character class is known. Confined to
+# the pairs that Tesseract (with default eng + OCR-B-ish input) actually
+# confuses on real passports.
+_DIGIT_TO_ALPHA = str.maketrans({"0": "O", "1": "I", "2": "Z", "5": "S", "8": "B"})
+_ALPHA_TO_DIGIT = str.maketrans(
+    {"O": "0", "Q": "0", "I": "1", "L": "1", "Z": "2", "S": "5", "B": "8"}
+)
+
+# Minimum line-1 length to bother repairing (need to reach the issuing-
+# country slice at cols 2-4).
+_LINE1_REPAIR_MIN = 5
+
+
+def repair_mrz_chars(line1: str, line2: str) -> tuple[str, str]:
+    """Fix obvious OCR character-class mistakes on known-purpose fields.
+
+    Tesseract (eng LSTM) sees passport MRZ glyphs and often emits the
+    wrong character class on real-world scans — ``1`` instead of ``I``
+    in nationality codes, ``O`` instead of ``0`` in dates, etc. These
+    substitutions are safe because the MRZ spec mandates the character
+    class at every position; if the OCR returned the wrong class, we
+    know the correct fix.
+
+    Does NOT correct same-class confusions (``K`` for ``<``, ``N`` for
+    ``M``, etc.) — those need either a Tesseract-5-format MRZ model or
+    an image preprocessing pass. Left as a known limitation per
+    extractors/ocr.py docstring.
+    """
+    if len(line1) >= _LINE1_REPAIR_MIN:
+        # Line 1 cols 2-4 (0-indexed): issuing country, 3 alpha chars.
+        l1 = list(line1)
+        l1[2:5] = list(line1[2:5].translate(_DIGIT_TO_ALPHA))
+        line1 = "".join(l1)
+
+    if len(line2) >= TD3_LINE_LENGTH:
+        l2 = list(line2)
+        # Doc-number check digit (col 9), digit
+        l2[9] = line2[9].translate(_ALPHA_TO_DIGIT)
+        # Nationality (cols 10-12), alpha
+        l2[10:13] = list(line2[10:13].translate(_DIGIT_TO_ALPHA))
+        # DOB (cols 13-18), digit; DOB check (col 19), digit
+        l2[13:20] = list(line2[13:20].translate(_ALPHA_TO_DIGIT))
+        # Sex (col 20) left alone — letters M/F/X or '<' are all fine
+        # Expiry (cols 21-26), digit; expiry check (col 27), digit
+        l2[21:28] = list(line2[21:28].translate(_ALPHA_TO_DIGIT))
+        # Personal check (col 42), digit; composite check (col 43), digit
+        l2[42] = line2[42].translate(_ALPHA_TO_DIGIT)
+        l2[43] = line2[43].translate(_ALPHA_TO_DIGIT)
+        line2 = "".join(l2)
+
+    return line1, line2
+
+
 class MRZFormatError(ValueError):
     """The MRZ string is malformed before any field-level checks."""
 

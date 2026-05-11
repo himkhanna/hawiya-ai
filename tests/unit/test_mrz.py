@@ -6,7 +6,7 @@ from datetime import date
 
 import pytest
 
-from hawiya.extractors.mrz import MRZFormatError, parse_td3
+from hawiya.extractors.mrz import MRZFormatError, parse_td3, repair_mrz_chars
 from hawiya.extractors.types import ChecksumStatus, Sex
 from hawiya.extractors.validators import compute_check_digit
 
@@ -407,3 +407,40 @@ def test_empty_personal_check_passes() -> None:
     parsed = parse_td3(line1, line2)
     assert parsed.personal_number == ""
     assert parsed.checksums.personal is True
+
+
+# ---------------------------------------------------------------------------
+# repair_mrz_chars — fix Tesseract's digit/letter class mistakes
+# ---------------------------------------------------------------------------
+
+
+def test_repair_fixes_nationality_digit_for_letter() -> None:
+    # Real-world Indian passport: nationality OCR'd as "1ND" instead of "IND".
+    line1, line2 = build_td3(nationality="IND")
+    corrupted_line2 = line2[:10] + "1ND" + line2[13:]
+    _, repaired = repair_mrz_chars(line1, corrupted_line2)
+    assert repaired[10:13] == "IND"
+
+
+def test_repair_fixes_issuing_country_digit_for_letter() -> None:
+    line1, line2 = build_td3(issuing="IND")
+    corrupted_line1 = line1[:2] + "1ND" + line1[5:]
+    repaired_l1, _ = repair_mrz_chars(corrupted_line1, line2)
+    assert repaired_l1[2:5] == "IND"
+
+
+def test_repair_fixes_dob_letter_for_digit() -> None:
+    # OCR mis-reads "0" as "O" in YYMMDD.
+    line1, line2 = build_td3(dob="900112")
+    corrupted_line2 = line2[:13] + "9OO112" + line2[19:]
+    _, repaired = repair_mrz_chars(line1, corrupted_line2)
+    assert repaired[13:19] == "900112"
+
+
+def test_repair_leaves_clean_lines_alone() -> None:
+    line1, line2 = build_td3(
+        nationality="ARE", issuing="ARE", dob="900112", expiry="300101"
+    )
+    r1, r2 = repair_mrz_chars(line1, line2)
+    assert r1 == line1
+    assert r2 == line2

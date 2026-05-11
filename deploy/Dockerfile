@@ -46,8 +46,6 @@ FROM base AS runtime
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         # Tesseract + English language data for PassportEye.
-        # PassportEye also looks for a 'mrz' tessdata file; with eng+OCR-B
-        # detection it works on standard MRZ images too.
         tesseract-ocr \
         tesseract-ocr-eng \
         libtesseract5 \
