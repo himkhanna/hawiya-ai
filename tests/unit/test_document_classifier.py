@@ -40,8 +40,23 @@ def test_classify_passport_for_jpeg() -> None:
     assert classify(b"\xff\xd8\xff\xe0\x00\x10JFIF") is DocumentType.PASSPORT
 
 
-def test_classify_passport_for_pdf() -> None:
-    assert classify(b"%PDF-1.7\nfoo") is DocumentType.PASSPORT
+def test_classify_rejects_pdf_until_phase_2() -> None:
+    # PDF is recognised but not supported yet (needs rasterisation).
+    # We want a clear "PDF not supported" message, not a generic one.
+    with pytest.raises(UnsupportedDocumentError, match="PDF"):
+        classify(b"%PDF-1.7\nfoo")
+
+
+def test_classify_rejects_heic_with_helpful_message() -> None:
+    # HEIC ftyp box: 4 bytes size (any), 'ftyp', 4 bytes brand.
+    heic = b"\x00\x00\x00\x20ftypheic\x00\x00\x00\x00mif1heic"
+    with pytest.raises(UnsupportedDocumentError, match="HEIC"):
+        classify(heic)
+
+
+def test_detects_heic_in_detect_format() -> None:
+    heic = b"\x00\x00\x00\x20ftypheic\x00\x00\x00\x00"
+    assert detect_format(heic) == "image/heic"
 
 
 def test_classify_rejects_empty() -> None:
