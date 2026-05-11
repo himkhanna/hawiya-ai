@@ -17,7 +17,10 @@ unit suite.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
+import os
+import tempfile
 from typing import Protocol
 
 TD3_LINE_COUNT = 2
@@ -56,16 +59,46 @@ class PassportEyeAdapter:
     def _read_sync(self, payload: bytes, _content_type: str) -> tuple[str, str]:
         try:
             from passporteye import read_mrz  # noqa: PLC0415
+            from PIL import Image, UnidentifiedImageError  # noqa: PLC0415
         except ImportError as e:
             raise OCRUnavailableError(
                 "PassportEye is not installed. Install with `pip install hawiya-ai[ocr]` "
                 "and ensure Tesseract is on PATH."
             ) from e
 
+        # PassportEye 2.2.2's Loader can't read a numpy array or a
+        # BytesIO directly — it always defers to scikit-image's
+        # imageio plugin which needs a path-like input it can sniff a
+        # format from. Cheap fix: decode the bytes with PIL (handles
+        # JPEG/PNG/TIFF/HEIC/etc.), re-encode as JPEG, and write to a
+        # short-lived temp file that PassportEye reads happily.
         try:
-            result = read_mrz(io.BytesIO(payload), extra_cmdline_params=self._extra)
-        except Exception as e:  # PassportEye wraps subprocess errors loosely.
-            raise OCRUnavailableError(f"OCR backend failed: {e}") from e
+            with Image.open(io.BytesIO(payload)) as pil_img:
+                pil_img.load()
+                rgb = (
+                    pil_img if pil_img.mode == "RGB" else pil_img.convert("RGB")
+                )
+                buf = io.BytesIO()
+                rgb.save(buf, format="JPEG", quality=95)
+                normalised = buf.getvalue()
+        except (UnidentifiedImageError, OSError) as e:
+            raise NoMRZFoundError(
+                f"could not decode image bytes (format unsupported or file corrupt): {e}"
+            ) from e
+
+        tmp = tempfile.NamedTemporaryFile(  # noqa: SIM115 — closed below
+            suffix=".jpg", delete=False
+        )
+        try:
+            tmp.write(normalised)
+            tmp.close()
+            try:
+                result = read_mrz(tmp.name, extra_cmdline_params=self._extra)
+            except Exception as e:  # PassportEye wraps subprocess errors loosely.
+                raise OCRUnavailableError(f"OCR backend failed: {e}") from e
+        finally:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp.name)
 
         if result is None:
             raise NoMRZFoundError("no MRZ region found in image")

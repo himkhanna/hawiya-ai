@@ -31,11 +31,14 @@ export default function CapturePanel({
   );
   const [error, setError] = useState<string | null>(null);
 
-  // Keep tab in sync if external capture flips back to sample
-  // (e.g. when user picks a new scenario from the header pills).
+  // If capture is reset to "sample" by an external action (header pill
+  // change, view-mode toggle), flip the tab back. Only depend on
+  // capture.kind — depending on `tab` would race against the user
+  // clicking the Upload tab (capture is still "sample" at that point
+  // so it would immediately flip back).
   useEffect(() => {
-    if (capture.kind === "sample" && tab === "upload") setTab("sample");
-  }, [capture, tab]);
+    if (capture.kind === "sample") setTab("sample");
+  }, [capture.kind]);
 
   function handleFiles(files: FileList | null): void {
     setError(null);
